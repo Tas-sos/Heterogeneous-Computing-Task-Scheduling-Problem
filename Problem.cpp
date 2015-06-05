@@ -10,10 +10,7 @@
 #include <iostream>
 #include <cstdlib> // Για το exti(1).
 #include <string> // Κυρίως για το διάβασμα των πραγματικών αριθμών και την μετατροπή τους από strint -> Double.
-#include <utility> // Για τα pairs.
-#include <vector>
-#include <algorithm> // Για τις αναζητήσεις.
-#include <iterator>  // Για το std::distance
+
 
 using namespace std;
 
@@ -23,23 +20,38 @@ Problem::Problem()
 
 	// Αρχικοποίηση στις ιδιότητες του αντικειμένου.
 
-	min_value = -1;
-	min_pos = -1;
+	min_value = -1; // Κρατάει την ελάχιστη "υποτιθέμενη - ενός βήματος μπροστά" τιμή.
+	min_original_value = -1; // Κρατάει την πραγματική τιμή της ελάχιστης εργασίας που βρέθηκε με βάση την "min_value".
+	min_posTASK = -1; // Σε ποια εργασία-γραμμή του πίνακα, είναι η ελάχιστη εργασία.
+	min_posCPU = -1; // Σε ποιον επεξεργαστή-στήλη του πίνακα, υπάρχει η ελάχιστη εργασία.
 
-	max_value = -1;
-	max_pos = -1;
+	posa_tasks_eminan = -1; // Κρατάει τον αριθμό των εργασιών που απομένουν ( έπειτα από την εύρεση μιας ελάχιστης εργασίας, μειώνεται κατά 1 )
 
-	processors_number = 0;
+
+	processors_number = 0; // Κρατάει τον αριθμό των επεξεργαστών.
+	tasks_number = 0; // Κρατάει τον αριθμό των εργασιών.
+
+	cout << "Δώσε τον αριθμό των εργασιών. ";
+	cout << "Εργασίες : "; cin >> tasks_number;
+
+	posa_tasks_eminan = tasks_number;
 
 	cout << "Δώσε τον αριθμό των επεξεργαστών. ";
 	cout << "Επεξεργαστές : "; cin >> processors_number;
 
-	processors_number++; // Δεν θα χρησιμοποιώ την θέση 0. Για να λέει θέση 1 = Επεξεργαστής 1, Θέση 2 = Επεξεργαστής 2.
 
-	MinTasks = new pair <int, int>[processors_number](); // Ορισμός των θέσεων του δυναμικού πίνακα.
+	// ================================== Ο πίνακας στον οποίο θα  γίνονται αλλαγές. ==================================
+	Tasks_and_processors = new double * [ tasks_number ](); // Φτιάχνω τις γραμμές του δυναμικού πίνακα.
 
-	processors.resize(processors_number); // Αυτός ο πίνακας θα είναι η "βάση" του. Η κάθε θέση/επεξεργαστής, θα περιέχει την λιστα με τους χρόνους του κάθε έργου.
+	for (int i = 0; i < tasks_number; i++) // Φτιάχνω τις στήλες του δυναμικού πίνακα για όλες τις γραμμές..
+		Tasks_and_processors[i] = new double [processors_number]; // Η κάθε γραμμή θα έχει "processors_number" στήλες.
 
+
+
+	// Και σε αυτόν τον ίδιο πίνακα θα κρατάω -*ΑΠΕΙΡΑΧΤΕΣ*- τις τιμές από όλες τις εργασίες.
+	Origina__Tasks_and_processors = new double * [ tasks_number ]();
+	for (int i = 0; i < tasks_number; i++)
+		Origina__Tasks_and_processors[i] = new double [processors_number];
 
 }
 
@@ -49,10 +61,9 @@ Problem::Problem()
 void	Problem::getDataFromFile()
 {
 
-
 	ifstream fl;
 
-	fl.open("Data/Braun_et_al/Sample"); // Το πρώτο αρχείο από τον φάκελο /Data/Braun_et_al/
+	fl.open("Data/Braun_et_al/u_c_hihi.0"); // Αρχεία από τον φάκελο /Data/Braun_et_al/
 
 	/* ===================== Έλεγχος ανοίγματος αρχείου ===================== */
 	if ( !fl )
@@ -62,96 +73,77 @@ void	Problem::getDataFromFile()
 	}
 	/* ===================== -------------------------- ===================== */
 
+	cout << "Έλεγχος αρχείου ................................... [OK]" <<endl;
+
 	string line_buffer {};
 
-	for ( int i=1; getline(fl, line_buffer); i++  ) // Διαβάζω γραμμή γραμμή, & το περιεχόμενο της γραμμής το πετάω σε ένα προσωρινό buffer -> "line_buffer".
-	{ // Ταυτόχρονα έχω και ένα μετρητή που θα μου δείχνει σε ποιον επεξεργαστή & εργασία βρίσκομαι.
+	for ( int task=0; task < tasks_number ; task++  ) // Για "tasks_number" φορές..
+	{
 
-		if ( i == processors_number ) // Αν βάλει για την τρέχουσα διεργασία "i" τις τιμές της σε όλους του επεξεργαστές.
-			i=1; // Τότε θα πάει ξανά από την αρχή. Δηλ. : Στην ΕΠΌΜΕΝΗ διεργασία η τιμή που έχει στον "i" επεξεργαστή. ;)
+		// Θα διαβάσω "processors_number" τιμές από το αρχείο..
+		for ( int cpu=0;( (cpu < processors_number) && (getline(fl, line_buffer)) ) ; cpu++ )
+		{
+			double value = atof ( line_buffer.c_str() ); // Μετατρέπω αρχικά σε πραγματικό αριθμό ( double ) αυτό που διαβάζω ( που είναι σε string ).
 
-		processors[i].push_back( atof( line_buffer.c_str() ) );/* Μετατρέπω σε πραγματικό αριθμό ( double ) αυτό που διαβάζω και
-																	το προσθέτω έπειτα στην λίστα (της θέσης)/του επεξεργαστή i . */
+			Tasks_and_processors[task][cpu] = value ; // Το εκχωρώ έπειτα στην εργασία "task" του επεξεργαστή "cpu", στο πίνακα όπου οι τιμές του θα αλλάζουν .
+			Origina__Tasks_and_processors[task][cpu] = value; // αλλά ΚΑΙ στον πίνακα που οι τιμές του δεν θα αλλάξουν.
 
+			//printf("Εργασία #%d \t %lf \t cpu #%d \n", task , Tasks_and_processors[task][cpu]+1 , cpu );
+		}
 	}
 
 
 	fl.close(); // Κλείσιμο του ρεύματος διαβάσματος του αρχείου.
-
-
-
 }
 
 
 
 
-void	Problem::PrintDatabyProcessors()
+void	Problem::Find_and_SAVE_the_lowest_values_of_all()
 {
-	// Για να δω τι έκανα..
-	//cout << " Ο πίνακας - vector 'processors' έχει μέγεθος : " << processors.size() << endl;
 
-	for ( int i = 1; i < processors_number ; i++ ) // Από την 1η θέση και ΌΧΙ από την 0! ( Έχω κάνει μια σύμβαση! Μην την ξεχνάω!! )
+	int task_f = 0;
+	for ( task_f = 0; task_f < tasks_number ; task_f++ ) // Για να αρχικοποιώ κάθε φορά την ελάχιστη τιμή..
 	{
-		cout << endl << "\t     Επεξεργαστής " << i << endl;
-		cout << "----------|-----------------|\n";
-		for ( unsigned int k = 0; k < processors[i].size(); k++ )
+		for ( int cpu = 0; cpu < processors_number ; cpu++ )
 			{
-			printf ( "Εργασία %d |\t %d \t    |\n" ,k+1 , processors[i][k] ) ;
-			printf ("----------|-----------------|\n");
+				min_value = Tasks_and_processors[task_f][cpu];
+				min_original_value = Origina__Tasks_and_processors[task_f][cpu]; // Για να κρατήσω την original τιμή του.
+
+				min_posTASK = task_f;
+				min_posCPU = cpu;
+
+				if ( min_value != -1 )
+					break;
 			}
 
-	}
-
-}
-
-
-
-
-void	Problem::Find_and_SAVE_the_lowest_values_of_all_the_processors()
-{
-
-	for ( unsigned int i = 1; i < processors.size() ; i++ ) // Από την 1η θέση και ΌΧΙ από την 0! ( Έχω κάνει μια σύμβαση! Μην την ξεχνάω!! )
-	{ // Για όλους τους επεξεργαστές δηλαδή..
-		Find_MIN_Value_and_PoS_by_Processor(i); // Βρες ΠΟΙΑ (min_value) και ΠΟΥ (min_pos) είναι η ελάχιστη διεργασία που έχει αυτός ο επεξεργαστής.
-		MinTasks[i] = make_pair( min_value , min_pos ); // Και κράτα αυτές τις τιμές στον πίνακα MinTasks για το επεξεργαστή αυτό.
-
-	}
-
-}
+		if ( min_value != -1 )
+			break;
+	} // Τέλος αρχικοποίησης ελάχιστης τιμής..
 
 
 
-
-void	Problem::Print_MinTasks()
-{
-	cout << endl << "Εμφάνιση του MinTaskS" << endl;
-
-	for ( int i = 1; i < processors_number ; i++ ) // Από την 1η θέση και ΌΧΙ από την 0! ( Έχω κάνει μια σύμβαση! Μην την ξεχνάω!! )
+	// Για να βρω τώρα την τυχόν μικρότερη τιμή.
+	for ( int task = task_f; task < tasks_number ; task++ ) // Από εκεί που βρήκα την ελάχιστη τιμή και κάτω..
 	{
-		cout << "Επεξεργαστής #" << i << "\t Ελάχιστη τιμή διεργασίας " << MinTasks[i].first << " η διεργασία " << MinTasks[i].second << " (" << MinTasks[i].second+1 << "η)" << endl;
-	}
-}
-
-
-
-
-int	Problem::Finding_Pos_of_MINimum_Task_by_MinTasks()
-{
-
-	int min_time = MinTasks[1].first; // Λέω αρχικά πως στον ΠΡΏΤΟ επεξεργαστή ( 1 διότι έχω κάνει την σύμβαση! ) υπάρχει ο ελάχιστος χρόνος διεργασίας σε σύγκριση και με όλους τους άλλους..
-	int pos = 1; // Και ότι στην πρώτη θέση του πίνακα βρίσκεται..
-
-	for ( int i = 2; i < processors_number ; i++ ) // Από την 2η θέση και ΌΧΙ από την 1η! ( Τώρα και για την σύμβαση που έχω κάνει, αλλά και γιατί την 1 την έχω βάλει ως min!
-	{
-		if ( min_time > MinTasks[i].first )
+		for ( int cpu = 0; cpu < processors_number; cpu++ )
 		{
-			min_time = MinTasks[i].first; // Αναθεωρώ ως προς τον καλύτερο χρόνο.
-			pos = i; // Παίρνω την θέση.
-		}
+			if ( (Tasks_and_processors[task][cpu] != -1) && (min_value > Tasks_and_processors[task][cpu]) )
+			{
+				min_value = Tasks_and_processors[task][cpu];
+				min_original_value = Origina__Tasks_and_processors[task][cpu];
+				min_posTASK = task;
+				min_posCPU = cpu;
 
+			}
+		}
 	}
 
-	return pos;
+	/*cout << "Η μικρότερη τιμή είναι : " << min_value << " στην θέση (" << min_posTASK << "," << min_posCPU << "). ";
+	cout << "Δηλαδή στον επεξεργαστή " << min_posCPU+1 << " η εργασία " << min_posTASK+1 << endl;
+
+	cout << "[F]: min_original_value = " << min_original_value << endl;
+	*/
 
 }
 
@@ -160,43 +152,17 @@ int	Problem::Finding_Pos_of_MINimum_Task_by_MinTasks()
 
 void	Problem::removing_the_current_minimum_task_by_all_processors()
 {
-	// Έτσι θα βρει τις ελάχιστες τιμές εργασιών σε όλους τους επεξεργαστές και θα αποθηκεύσει τα αποτελέσματα στον πίνακα "MinTasks" .
-	//Find_and_SAVE_the_lowest_values_of_all_the_processors();
-
-	int se_pia_cpu = Finding_Pos_of_MINimum_Task_by_MinTasks(); // Έτσι θα βρούμε σε πoιον επεξεργαστή υπάρχει η χαμηλότερη τιμή.
-
-//	cout << endl;
-//	cout << "Άρα ήμαστε στον επεξεργαστή " << se_pia_cpu << " με τιμή εργασίας " << MinTasks[se_pia_cpu].first;
-//	cout << " που είναι η εργασία " << MinTasks[se_pia_cpu].second << " (" << MinTasks[se_pia_cpu].second+1 << "η)" << endl;
+	for ( int task = 0; task < tasks_number ; task++ ) // Για ΌΛΕΣ τις εργασίες στον επεξεργαστή που βρέθηκε η εργασία με την χαμηλότερη τιμή..
+		if ( Tasks_and_processors[task][min_posCPU] != -1) // Στις εργασίες αυτές που απομένουν ακόμη ( διότι αυτές με -1 σημαίνει πως αφαιρέθηκαν ).
+				Tasks_and_processors[task][min_posCPU] += min_original_value; /* Πρόσθεσε τον χρόνο της μικρότερης εργασίας.
+				Τον ΠΡΑΓΜΑΤΙΚΌ χρόνο της όμως & ΟΧΙ τον χρόνο που έχει μαζί με τις τυχόν άλλες εργασίες που μπορεί να έχουν προστεθεί και σε εκείνη. -!*!S.O.S.!*!-  */
 
 
-	// Οπότε πάω τώρα και αφαιρώ την εργασία "MinTasks[se_pia_cpu].second" ( που είχε τον μικρότερο χρόνο ) από όλους τους επεξεργαστές.
+	for ( int cpu = 0; cpu < processors_number; cpu++ ) // Έπειτα αφαιρώ την εργασία αυτή από όλους του επεξεργαστές.
+		Tasks_and_processors[min_posTASK][cpu] = -1 ;
 
-	for ( int i = 1; i < processors_number ; i++ ) // Από την 1η θέση και ΌΧΙ από την 0! ( Έχω κάνει μια σύμβαση! Μην την ξεχνάω!! )
-	{ // Δηλαδή πάω σε όλους τους επεξεργαστές..
-		for ( int k = 0; k < processors[i].size(); k++ ) // και σε κάθε επεξεργαστή πάω σε όλες τις εργασίες του
-		{
-			if ( k == MinTasks[se_pia_cpu].second ) // Όταν βρίσκω τον αριθμό της εργασίας στον επεξεργαστή.. Ο αριθμός με νοιάζει ( ποια εργασία είναι, η 1,2... )
-			{
-				processors[i].erase (processors[i].begin() + k); // την διαγράφω.
-			}
 
-		}
-
-	}
-
-	//PrintDatabyProcessors(); // Βλέπω αν όντως διαγράφηκε η εργασία με τον ελάχιστο χρόνο από όλους του επεξεργαστές.
-
-	// Και πρέπει να προσθέσω όμως στον επεξεργαστή που βρισκόταν η ελάχιστη εργασία, τον χρόνο της, στις υπόλοιπες εργασίες.
-
-	for ( unsigned int k = 0; k < processors[se_pia_cpu].size(); k++ ) //
-	{
-		processors[se_pia_cpu][k] += MinTasks[se_pia_cpu].first;
-
-	}
-
-	//PrintDatabyProcessors();
-	/* Οπότε πλέον ας δω αν όντως έχουν αλλάξει οι χρόνοι στις υπόλοιπες εργασίες ΜΌΝΟ του επεξεργαστή "se_pia_cpu"	που είχε την ελάχιστη σε χρόνο εργασία. */
+	posa_tasks_eminan--; // Αφαιρώ ένα task ( για να ξέρω πόσα μου μένουν - για να τελειώσω ).
 
 }
 
@@ -205,7 +171,7 @@ void	Problem::removing_the_current_minimum_task_by_all_processors()
 
 int		Problem::Number_of_Tasks()
 {
-	return processors[1].size();
+	return posa_tasks_eminan;
 }
 
 
@@ -213,14 +179,13 @@ int		Problem::Number_of_Tasks()
 
 void	Problem::Final_Time()
 {
-	Find_and_SAVE_the_lowest_values_of_all_the_processors(); // Ποιος από όλους έχει την καλύτερη τιμή στην τελευταία εργασία.
-
-	int se_pia_cpu = Finding_Pos_of_MINimum_Task_by_MinTasks(); // Έτσι θα βρούμε σε πoιον επεξεργαστή υπάρχει η χαμηλότερη τιμή.
+	Find_and_SAVE_the_lowest_values_of_all();
 
 	cout << endl;
-	cout << "|=======================================================================|" << endl;
-	cout << "|\tΟ επεξεργαστής " << se_pia_cpu << " θα έχει την ελάχιστη εργασία με χρόνο : " << MinTasks[se_pia_cpu].first << "     |" <<endl;
-	cout << "|=======================================================================|" << endl;
+	cout << "|===================================================================================|" << endl;
+	cout << "|\tΟ επεξεργαστής " << min_posCPU+1 << " θα έχει την ελάχιστη εργασία με χρόνο : ";
+	printf ("%lf  \n", Tasks_and_processors[min_posTASK][min_posCPU] );
+	cout << "|===================================================================================|" << endl;
 
 
 }
@@ -228,61 +193,60 @@ void	Problem::Final_Time()
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* ==================================== Ιδιωτικοί μέθοδοι. ==================================== */
-
-
-
-void		Problem::Find_MIN_Value_and_PoS_by_Processor(int cpu)
+void	Problem::PrintDatabyProcessors() // Για να δω τι έκανα..
 {
-	auto Vmin = min_element( processors[cpu].begin(), processors[cpu].end() ); // c++11
-    min_value = *Vmin; // Το αποθηκεύω στην ιδιότητα του αντικειμένου.
+
+	for ( int task = 0 ; task < tasks_number; task++  )
+	{
+		if ( Tasks_and_processors[task][0] == -1 ) // Αν σε κάποιo task από την πρώτη κιόλας cpu βρω τιμή -1 ( που πάει να πει πως αφαιρέθηκε )
+			continue; // Οπότε δεν την εμφανίζω.. πάω στην επόμενη. ;)
 
 
-    min_pos = find( processors[cpu].begin() , processors[cpu].end() , min_value) - processors[cpu].begin();
+		cout << endl << "\t\t Task #" << task+1 << endl;
+		cout << "----------|------------------------------------------|\n";
 
-    //cout << "min = " << min_value << " στην θέση : " << min_pos << endl;
+
+		for ( int cpu = 0; cpu < processors_number; cpu++ )
+			{
+			printf ( "Cpu #%d    |\t %lf \tOfficial => %lf \n" ,cpu+1 , Tasks_and_processors[task][cpu], Origina__Tasks_and_processors[task][cpu] ) ;
+			printf ("----------|------------------------------------------|\n");
+			}
+	}
 
 }
 
 
 
 
-void		Problem::Find_MAX_Value_and_PoS_by_Processor(int cpu)
+void	Problem::Original_PrintDatabyProcessors()
 {
-	auto Vmax = max_element( processors[cpu].begin(), processors[cpu].end() ); // c++11
-	max_value = *Vmax;
+	// Για να δω τι έκανα..
+	for ( int task = 0 ; task < tasks_number; task++  )
+	{
+		if ( Origina__Tasks_and_processors[task][0] == -1 ) // Αν σε κάποιo task από την πρώτη κιόλας cpu βρω τιμή -1 πάει να πει πως αφαιρέθηκε
+			continue; // Οπότε δεν την εμφανίζω.. πάω στην επόμενη. ;)
+
+		cout << endl << "\t\t Task #" << task+1 << endl;
+		cout << "----------|---------------------------|\n";
 
 
-    max_pos = find( processors[cpu].begin() , processors[cpu].end() , max_value) - processors[cpu].begin();
+		for ( int cpu = 0; cpu < processors_number; cpu++ )
+			{
+			printf ( "Cpu #%d    |\t %lf \n" ,cpu+1 , Origina__Tasks_and_processors[task][cpu] ) ;
+			printf ("----------|---------------------------|\n");
+			}
 
-    //cout << "max = " << max_value << " στην θέση : " << max_pos << endl;
+	}
+
 }
+
+
+
+
+
+
+
+
 
 
 
@@ -316,8 +280,32 @@ void		Problem::Find_MAX_Value_and_PoS_by_Processor(int cpu)
 
 
 Problem::~Problem() {
-	delete [] MinTasks;
-//	delete [] processor_total;
+
+	for (int i = 0; i < tasks_number; i++)
+		delete[] Tasks_and_processors[i];
+
+	delete[] Tasks_and_processors;
+
+
+
+	for (int i = 0; i < tasks_number; i++)
+			delete[] Origina__Tasks_and_processors[i];
+
+		delete[] Origina__Tasks_and_processors;
+
+
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
