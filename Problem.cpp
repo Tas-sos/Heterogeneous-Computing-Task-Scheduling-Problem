@@ -10,6 +10,7 @@
 #include <iostream>
 #include <cstdlib> // Για το exti(1).
 #include <string> // Κυρίως για το διάβασμα των πραγματικών αριθμών και την μετατροπή τους από strint -> Double.
+#include <utility> // Για τα pairs.
 
 
 using namespace std;
@@ -20,16 +21,14 @@ Problem::Problem()
 
 	// Αρχικοποίηση στις ιδιότητες του αντικειμένου.
 
-	min_value = -1; // Κρατάει την ελάχιστη "υποτιθέμενη - ενός βήματος μπροστά" τιμή.
-	min_original_value = -1; // Κρατάει την πραγματική τιμή της ελάχιστης εργασίας που βρέθηκε με βάση την "min_value".
-	min_posTASK = -1; // Σε ποια εργασία-γραμμή του πίνακα, είναι η ελάχιστη εργασία.
-	min_posCPU = -1; // Σε ποιον επεξεργαστή-στήλη του πίνακα, υπάρχει η ελάχιστη εργασία.
+	min_value = -1;
+	min_posTASK = -1;
+	min_posCPU = -1;
 
-	posa_tasks_eminan = -1; // Κρατάει τον αριθμό των εργασιών που απομένουν ( έπειτα από την εύρεση μιας ελάχιστης εργασίας, μειώνεται κατά 1 )
+	posa_tasks_eminan = -1;
 
-
-	processors_number = 0; // Κρατάει τον αριθμό των επεξεργαστών.
-	tasks_number = 0; // Κρατάει τον αριθμό των εργασιών.
+	processors_number = 0;
+	tasks_number = 0;
 
 	cout << "Δώσε τον αριθμό των εργασιών. ";
 	cout << "Εργασίες : "; cin >> tasks_number;
@@ -40,7 +39,6 @@ Problem::Problem()
 	cout << "Επεξεργαστές : "; cin >> processors_number;
 
 
-	// ================================== Ο πίνακας στον οποίο θα  γίνονται αλλαγές. ==================================
 	Tasks_and_processors = new double * [ tasks_number ](); // Φτιάχνω τις γραμμές του δυναμικού πίνακα.
 
 	for (int i = 0; i < tasks_number; i++) // Φτιάχνω τις στήλες του δυναμικού πίνακα για όλες τις γραμμές..
@@ -48,10 +46,8 @@ Problem::Problem()
 
 
 
-	// Και σε αυτόν τον ίδιο πίνακα θα κρατάω -*ΑΠΕΙΡΑΧΤΕΣ*- τις τιμές από όλες τις εργασίες.
-	Origina__Tasks_and_processors = new double * [ tasks_number ]();
-	for (int i = 0; i < tasks_number; i++)
-		Origina__Tasks_and_processors[i] = new double [processors_number];
+	Total_processors_Time = new double [processors_number] () ;
+	texon_minmum_xroni_apo_ta_MI_dromologoumena_Task = new pair<double, int> [tasks_number] ();
 
 }
 
@@ -80,151 +76,32 @@ void	Problem::getDataFromFile()
 	for ( int task=0; task < tasks_number ; task++  ) // Για "tasks_number" φορές..
 	{
 
-		// Θα διαβάσω "processors_number" τιμές από το αρχείο..
+		// Θα διαβάσω "processors_number" τιμές από το αρχείο..Για κάθε Task δηλαδή διαβάζω τους χρόνους του στους διαφορετικούς επεξεργαστές.
 		for ( int cpu=0;( (cpu < processors_number) && (getline(fl, line_buffer)) ) ; cpu++ )
 		{
-			double value = atof ( line_buffer.c_str() ); // Μετατρέπω αρχικά σε πραγματικό αριθμό ( double ) αυτό που διαβάζω ( που είναι σε string ).
-
-			Tasks_and_processors[task][cpu] = value ; // Το εκχωρώ έπειτα στην εργασία "task" του επεξεργαστή "cpu", στο πίνακα όπου οι τιμές του θα αλλάζουν .
-			Origina__Tasks_and_processors[task][cpu] = value; // αλλά ΚΑΙ στον πίνακα που οι τιμές του δεν θα αλλάξουν.
+			double value = atof ( line_buffer.c_str() );
+			Tasks_and_processors[task][cpu] = value ;	/* Μετατρέπω σε πραγματικό αριθμό ( double ) αυτό που διαβάζω και
+																			το προσθέτω έπειτα στην λίστα (της θέσης)/του επεξεργαστή i . */
 
 			//printf("Εργασία #%d \t %lf \t cpu #%d \n", task , Tasks_and_processors[task][cpu]+1 , cpu );
 		}
+
 	}
 
-
-	fl.close(); // Κλείσιμο του ρεύματος διαβάσματος του αρχείου.
+	fl.close();
 }
 
 
 
 
-void	Problem::Find_and_SAVE_the_lowest_values_of_all()
-{
 
-	int task_f = 0;
-	for ( task_f = 0; task_f < tasks_number ; task_f++ ) // Για να αρχικοποιώ κάθε φορά την ελάχιστη τιμή..
-	{
-		for ( int cpu = 0; cpu < processors_number ; cpu++ )
-			{
-				min_value = Tasks_and_processors[task_f][cpu];
-				min_original_value = Origina__Tasks_and_processors[task_f][cpu]; // Για να κρατήσω την original τιμή του.
-
-				min_posTASK = task_f;
-				min_posCPU = cpu;
-
-				if ( min_value != -1 )
-					break;
-			}
-
-		if ( min_value != -1 )
-			break;
-	} // Τέλος αρχικοποίησης ελάχιστης τιμής..
-
-
-
-	// Για να βρω τώρα την τυχόν μικρότερη τιμή.
-	for ( int task = task_f; task < tasks_number ; task++ ) // Από εκεί που βρήκα την ελάχιστη τιμή και κάτω..
-	{
-		for ( int cpu = 0; cpu < processors_number; cpu++ )
-		{
-			if ( (Tasks_and_processors[task][cpu] != -1) && (min_value > Tasks_and_processors[task][cpu]) )
-			{
-				min_value = Tasks_and_processors[task][cpu];
-				min_original_value = Origina__Tasks_and_processors[task][cpu];
-				min_posTASK = task;
-				min_posCPU = cpu;
-
-			}
-		}
-	}
-
-	/*cout << "Η μικρότερη τιμή είναι : " << min_value << " στην θέση (" << min_posTASK << "," << min_posCPU << "). ";
-	cout << "Δηλαδή στον επεξεργαστή " << min_posCPU+1 << " η εργασία " << min_posTASK+1 << endl;
-
-	cout << "[F]: min_original_value = " << min_original_value << endl;
-	*/
-
-}
-
-
-
-
-void	Problem::removing_the_current_minimum_task_by_all_processors()
-{
-	for ( int task = 0; task < tasks_number ; task++ ) // Για ΌΛΕΣ τις εργασίες στον επεξεργαστή που βρέθηκε η εργασία με την χαμηλότερη τιμή..
-		if ( Tasks_and_processors[task][min_posCPU] != -1) // Στις εργασίες αυτές που απομένουν ακόμη ( διότι αυτές με -1 σημαίνει πως αφαιρέθηκαν ).
-				Tasks_and_processors[task][min_posCPU] += min_original_value; /* Πρόσθεσε τον χρόνο της μικρότερης εργασίας.
-				Τον ΠΡΑΓΜΑΤΙΚΌ χρόνο της όμως & ΟΧΙ τον χρόνο που έχει μαζί με τις τυχόν άλλες εργασίες που μπορεί να έχουν προστεθεί και σε εκείνη. -!*!S.O.S.!*!-  */
-
-
-	for ( int cpu = 0; cpu < processors_number; cpu++ ) // Έπειτα αφαιρώ την εργασία αυτή από όλους του επεξεργαστές.
-		Tasks_and_processors[min_posTASK][cpu] = -1 ;
-
-
-	posa_tasks_eminan--; // Αφαιρώ ένα task ( για να ξέρω πόσα μου μένουν - για να τελειώσω ).
-
-}
-
-
-
-
-int		Problem::Number_of_Tasks()
-{
-	return posa_tasks_eminan;
-}
-
-
-
-
-void	Problem::Final_Time()
-{
-	Find_and_SAVE_the_lowest_values_of_all();
-
-	cout << endl;
-	cout << "|===================================================================================|" << endl;
-	cout << "|\tΟ επεξεργαστής " << min_posCPU+1 << " θα έχει την ελάχιστη εργασία με χρόνο : ";
-	printf ("%lf  \n", Tasks_and_processors[min_posTASK][min_posCPU] );
-	cout << "|===================================================================================|" << endl;
-
-
-}
-
-
-
-
-void	Problem::PrintDatabyProcessors() // Για να δω τι έκανα..
+void	Problem::PrintDatabyProcessors() // Εμφάνιση στοιχείων των ΜΗ δρομολογούμενων διεργασιών.
 {
 
 	for ( int task = 0 ; task < tasks_number; task++  )
 	{
-		if ( Tasks_and_processors[task][0] == -1 ) // Αν σε κάποιo task από την πρώτη κιόλας cpu βρω τιμή -1 ( που πάει να πει πως αφαιρέθηκε )
-			continue; // Οπότε δεν την εμφανίζω.. πάω στην επόμενη. ;)
-
-
-		cout << endl << "\t\t Task #" << task+1 << endl;
-		cout << "----------|------------------------------------------|\n";
-
-
-		for ( int cpu = 0; cpu < processors_number; cpu++ )
-			{
-			printf ( "Cpu #%d    |\t %lf \tOfficial => %lf \n" ,cpu+1 , Tasks_and_processors[task][cpu], Origina__Tasks_and_processors[task][cpu] ) ;
-			printf ("----------|------------------------------------------|\n");
-			}
-	}
-
-}
-
-
-
-
-void	Problem::Original_PrintDatabyProcessors()
-{
-	// Για να δω τι έκανα..
-	for ( int task = 0 ; task < tasks_number; task++  )
-	{
-		if ( Origina__Tasks_and_processors[task][0] == -1 ) // Αν σε κάποιo task από την πρώτη κιόλας cpu βρω τιμή -1 πάει να πει πως αφαιρέθηκε
-			continue; // Οπότε δεν την εμφανίζω.. πάω στην επόμενη. ;)
+		if ( Tasks_and_processors[task][0] == -1 ) // Αν σε κάποιο task από την πρώτη κιόλας cpu βρω τιμή -1 πάει να πει πως αφαιρέθηκε - δρομολογήθηκε..
+			continue; // Οπότε δεν την εμφανίζω, πάω στην επόμενη διεργασία. ;)
 
 		cout << endl << "\t\t Task #" << task+1 << endl;
 		cout << "----------|---------------------------|\n";
@@ -232,7 +109,7 @@ void	Problem::Original_PrintDatabyProcessors()
 
 		for ( int cpu = 0; cpu < processors_number; cpu++ )
 			{
-			printf ( "Cpu #%d    |\t %lf \n" ,cpu+1 , Origina__Tasks_and_processors[task][cpu] ) ;
+			printf ( "Cpu #%d    |\t %lf \t %lf \n" ,cpu+1 , Tasks_and_processors[task][cpu], Total_processors_Time[cpu] ) ;
 			printf ("----------|---------------------------|\n");
 			}
 
@@ -244,6 +121,48 @@ void	Problem::Original_PrintDatabyProcessors()
 
 
 
+void Problem::MinMin() // Ο αλγόριθμος Min-Min.
+{
+
+//	PrintDatabyProcessors();
+
+	for (int task = 0; Number_of_Tasks() ; task++ )
+	{
+		Euresi_elaxiston_timon_apo_ta_mi_dromologoumena_tasks();
+		Find_min_by_min();
+		removing_the_current_minimum_task_by_all_processors();
+
+//		cout << "\n==========================================================\n";
+//		PrintDatabyProcessors();
+	}
+
+	Final_Min_Min_Time();
+
+}
+
+
+
+
+
+void Problem::MaxMin() // Ο αλγόριθμος Max-Min.
+{
+
+//	PrintDatabyProcessors();
+
+	for (int task = 0; Number_of_Tasks() ; task++ )
+	{
+
+		Euresi_elaxiston_timon_apo_ta_mi_dromologoumena_tasks();
+		Find_max_by_min(); // Τώρα εδώ θα βρίσκη την *μέγιστη* από τις ελάχιστες. :)
+		removing_the_current_minimum_task_by_all_processors();
+
+
+//		cout << "\n==========================================================\n";
+//		PrintDatabyProcessors();
+	}
+	Final_Max_Min_Time(); // Και στο τέλος επίσης θέλουμε την *μέγιστη" από τις ελάχιστες. :)
+
+}
 
 
 
@@ -252,6 +171,237 @@ void	Problem::Original_PrintDatabyProcessors()
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ==================================== Ιδιωτικοί μέθοδοι. ==================================== */
+
+
+// 	For Min-Min.
+
+
+void	Problem::Euresi_elaxiston_timon_apo_ta_mi_dromologoumena_tasks()
+{ /* Θα βρίσκω για όλες τις ΔΙΕΡΓΑΣΊΕΣ σε ποιον επεξεργαστή έχουν τον ελάχιστον χρόνο.
+ ( Συνυπολογίζοντας *το χρόνο που χρειάζεται ο επεξεργαστής*, για τις ΉΔΗ δρομολογούμενες σε αυτόν διεργασίες ) . */
+
+	for ( int task = 0; task < tasks_number ; task ++ ) // Για κάθε διεργασία λοιπόν..
+	{
+
+		if ( Tasks_and_processors[task][0] == -1 ) /* Αν βρει διεργασία που ΈΧΕΙ δρομολογηθεί.. ( σε κάποιον επεξεργαστή ).
+											Άρα στον πίνακα "Tasks_and_processors" η διεργασία αυτή θα έχει σε κάθε επεξεργαστή -1. */
+			continue; // πάνε στην επόμενη ΔΙΕΡΓΑΣΊΑ..
+
+		// Αλλιώς αν δεν έχει δρομολογηθεί όμως... αρχικοποιούμε πως και καλά ο *αρχικός* μικρότερος χρόνο είναι στον πρώτο επεξεργαστή.
+		min_value = Tasks_and_processors[task][0] + Total_processors_Time[0]; // Ο χρόνος της (συνυπολογίζοντας και τον χρόνο των διεργασιών που έχουν δρομολογηθεί σε αυτόν τον επεξεργαστή).
+		min_posTASK = task; // Ποια διεργασία είναι.
+		min_posCPU = 0; // Σε ποιον επεξεργαστή.
+
+
+		// Για να βρω τώρα την μικρότερη τιμή.
+		for ( int cpu = 1; cpu < processors_number ; cpu++ ) // Από την δεύτερη οπότε cpu και "σαπέρα" :P
+		{
+
+			if ( min_value > (Tasks_and_processors[task][cpu] + Total_processors_Time[cpu]) )
+			{
+				min_value = Tasks_and_processors[task][cpu] + Total_processors_Time[cpu];
+				min_posTASK = task;
+				min_posCPU = cpu;
+
+			}
+
+		}
+
+		// Οπότε τώρα για την διεργασία που βρήκα την ελάχιστη τιμή της. Πηγαίνω στον πίνακα στην θέση - διεργασία..
+		texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[min_posTASK].first = min_value; // κρατάω στο πρώτο μέρος τον χρόνο
+		texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[min_posTASK].second = min_posCPU; // στο δεύτερο μέρος σε ποια CPU είναι..
+
+	}
+
+//	cout << "Οι ελάχιστες τιμές από κάθε εργασία είναι : " << endl;
+//
+//	for (int i = 0 ; i< tasks_number; i++)
+//		cout << "Task #" << i+1 << "\t->  " << texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[i].first << endl;
+//
+}
+
+
+
+
+
+void Problem::Find_min_by_min()
+{
+	int task_Po = 0;
+	// Επειδή μπορεί και η πρώτη θέση του πίνακα να μην έχει τιμή ( -1 ) - ( *εξηγώ παρακάτω γιατί.. ). Οπότε μέχρι να βρει..
+	for ( int task_Po = 0 ; task_Po < tasks_number; task_Po++  )
+		if ( texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task_Po].first != -1 )
+		{
+			min_value = texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task_Po].first; // "Ελάχιστος" χρόνος.
+			min_posCPU = texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task_Po].second; // Σε ποιον ΕΠΕΞΕΡΓΑΣΤΉ είναι ο "ελάχιστος" χρόνος.
+			min_posTASK = task_Po; // Ποια διεργασία είναι αυτή με τον "ελάχιστο" χρόνο.
+			break; // Έτσι και βρω μια.. τελείωση η αποστολή αυτής της loop. :)
+		}
+
+
+	// Για όλες τις ελάχιστες τιμές του πίνακα.. ( που είναι τόσες όσες και οι εναπομείναντες αδρομολόγιτες διεργασίες ).
+	for ( int task = task_Po ; task < tasks_number; task++  ) // Από εκεί που αρχικοποίησα και κάτω.. :)...
+	{
+		if ( ( texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task].first != -1 ) && (min_value > texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task].first) ) // Πρώτα να μην είναι -1
+			{
+			min_value = texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task].first; // Minimum-Time.
+			min_posCPU = texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task].second; // Minimum-CPU.
+			min_posTASK = task; // Minimum-Task.
+			}
+
+	}
+
+//	cout << "Ο ελάχιστος χρόνος από τους ελάχιστους είναι ο: " << min_value << " της " << min_posTASK+1;
+//	cout <<" διεργασίας στον " << min_posCPU+1 << " επεξεργαστή." << endl;
+//
+	Total_processors_Time[min_posCPU] = min_value; /* Βάζω πλέον αυτή την ελάχιστη τιμή στον επεξεργαστή "min_posCPU",
+	στον πίνακα που κρατάω τους συνολικούς χρόνους που θα έχουν οι επεξεργαστές με τις δρομολογημένες διεργασίες. */
+
+
+	// "Καθαρίζω" τον πίνακα που κρατάει τις τρέχουσες ελάχιστες τιμές..
+	for ( int i = 0; i<tasks_number; i++)
+		texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[i].first = -1;
+
+	/* Έτσι πλέον και εδώ που σιγά σιγά θα έχει όλο και λιγότερες τιμές ( λόγο των δρομολογημένων διεργασιών που πλέον "δε θα παίζουν").
+	   Για τις θέσεις/διεργασίες που θα μένουν άδειες, θα τις σημαδεύω με -1 ώστε να μην τις λαμβάνω έπειτα υπόψιν. :) */
+
+}
+
+
+
+
+
+void	Problem::removing_the_current_minimum_task_by_all_processors()
+{
+
+	for ( int cpu = 0; cpu < processors_number; cpu++ ) // Αφαιρώ την δρομολογημένη πλέον εργασία, από όλους του επεξεργαστές.
+		Tasks_and_processors[min_posTASK][cpu] = -1 ;
+
+
+	posa_tasks_eminan--; // Αφαιρώ ένα task ( για να ξέρω πόσα μου μένουν - για να τελειώσω ).
+
+}
+
+
+
+
+
+bool	Problem::Number_of_Tasks()
+{
+	return posa_tasks_eminan > 0;
+}
+
+
+
+
+
+void	Problem::Final_Min_Min_Time()
+{
+	cout << endl;
+	cout << "|===================================================================================|" << endl;
+	cout << "|\tΟ επεξεργαστής " << min_posCPU+1 << " έχει τον ελάχιστο χρόνο, ο οποίος είναι : ";
+	printf ("%lf  \n", Total_processors_Time[min_posCPU] );
+	cout << "|===================================================================================|" << endl;
+
+}
+
+
+
+
+// 	For Max-Min.
+
+void Problem::Find_max_by_min()
+{
+	int task_Po = 0;
+	for ( int task_Po = 0 ; task_Po < tasks_number; task_Po++  ) // Επειδή μπορεί και η πρώτη θέση του πίνακα να μην έχει τιμή ( -1 ). Μέχρι να βρει..
+		if ( texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task_Po].first != -1 )
+		{
+			min_value = texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task_Po].first; // "Ελάχιστος" χρόνος.
+			min_posCPU = texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task_Po].second; // Σε ποιον ΕΠΕΞΕΡΓΑΣΤΉ είναι ο "ελάχιστος" χρόνος.
+			min_posTASK = task_Po; // Ποια διεργασία "Ελάχιστος" χρόνος.
+			break; // Έτσι και βρω μια.. τελείωση η αποστολή αυτής της loop. :)
+		}
+
+
+	// για όλες τις ελάχιστες τιμές.. ( που είναι τόσες όσες και οι εναπομείναντες αδρομολόγιτες διεργασίες ).
+	for ( int task = task_Po ; task < tasks_number; task++  ) // Από εκεί που αρχικοποίησα και κάτω.. :)...
+	{
+		if ( ( texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task].first != -1 ) && (min_value < texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task].first) ) // Πρώτα να μην είναι -1
+			{				// Η μόνη διαφορά με τον Min-Min σε αυτό το κομμάτι κώδικα είναι αυτή  ^ εδώ. Πλέον εδώ βρίσκει την μεγαλύτερη!
+			min_value = texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task].first;
+			min_posCPU = texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[task].second;
+			min_posTASK = task;
+			}
+
+	}
+
+//	cout << "Ο ελάχιστος χρόνος από τους ελάχιστους είναι ο: " << min_value << " της " << min_posTASK+1;
+//	cout <<" διεργασίας στον " << min_posCPU+1 << " επεξεργαστή." << endl;
+//
+	Total_processors_Time[min_posCPU] = min_value; /* Βάζω πλέον αυτή την ελάχιστη τιμή στον επεξεργαστή "min_posCPU",
+	στον πίνακα που κρατάω τους συνολικούς χρόνους που θα έχουν οι επεξεργαστές με τις δρομολογημένες διεργασίες. */
+
+
+	// "Καθαρίζω" τον πίνακα που κρατάει τις τρέχουσες ελάχιστες τιμές..
+	for ( int i = 0; i<tasks_number; i++)
+		texon_minmum_xroni_apo_ta_MI_dromologoumena_Task[i].first = -1;
+
+	/* Έτσι πλέον και εδώ που σιγά σιγά θα έχει όλο και λιγότερες τιμές ( λόγο των δρομολογημένων διεργασιών που πλέον "δε θα παίζουν").
+	   Για τις θέσεις/διεργασίες που θα μένουν άδειες, θα τις σημαδεύω με -1 ώστε να μην τις λαμβάνω έπειτα υπόψιν. :) */
+
+}
+
+
+
+
+
+void	Problem::Final_Max_Min_Time() // Εδώ τώρα θέλω, από όλους τους επεξεργαστές που έχουν δρομολογηθεί πλέον όλες οι διεργασίες
+{ // σύμφωνα με τον Max-Min αλγόριθμο, από αυτούς του επεξεργαστές, τον επεξεργαστή που έχει τον *μεγαλύτερο" χρόνο.
+
+	double max = Total_processors_Time[0];
+	int max_cpu_pos = 0;
+
+	for ( int cpu = 1; cpu < processors_number; cpu++ )
+		if ( max < Total_processors_Time[cpu] )
+		{
+			max = Total_processors_Time[cpu];
+			max_cpu_pos = cpu;
+		}
+
+
+	cout << endl;
+	cout << "|===================================================================================|" << endl;
+	cout << "|\tΟ επεξεργαστής " << max_cpu_pos+1 << " έχει τον μέγιστο χρόνο, ο οποίος είναι : ";
+	printf ("%lf  \n", Total_processors_Time[max_cpu_pos] );
+	cout << "|===================================================================================|" << endl;
+
+
+}
 
 
 
@@ -287,25 +437,10 @@ Problem::~Problem() {
 	delete[] Tasks_and_processors;
 
 
-
-	for (int i = 0; i < tasks_number; i++)
-			delete[] Origina__Tasks_and_processors[i];
-
-		delete[] Origina__Tasks_and_processors;
+	delete[] Total_processors_Time;
+	delete[] texon_minmum_xroni_apo_ta_MI_dromologoumena_Task;
 
 
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
